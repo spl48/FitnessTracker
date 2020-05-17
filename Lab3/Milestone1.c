@@ -1,6 +1,8 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <stdlib.h>
+#include <stdio.h>
+#include <math.h>
 #include "inc/hw_memmap.h"
 #include "inc/hw_types.h"
 #include "inc/hw_i2c.h"
@@ -15,12 +17,25 @@
 #include "i2c_driver.h"
 #include "circBufT.h"
 #include "buttons4.h"
+#include "driverlib/fpu.h"
 
 #define BUF_SIZE 10
 #define SAMPLE_RATE_HZ 10
 
 #define SYSTICK_RATE_HZ 100
 #define ACCTICK_RATE_HZ 2
+
+#define STEP_THRESHOLD 1500
+#define STEP_LENGTH 0.0009
+
+#define MILES_CONSTANT 0.6213712
+
+#define TEST_MODE_STEPS_UP 100
+#define TEST_MODE_DIST_UP 0.09
+#define TEST_MODE_STEPS_DOWN 500
+#define TEST_MODE_DIST_DOWN 4.5
+
+#define HOLD_THRESHOLD 100000
 
 typedef struct{
     int16_t x;
@@ -37,7 +52,12 @@ static circBuf_t g_zinBuffer;
 static uint32_t g_ulSampCnt;    // Counter for the interrupts
 volatile uint8_t accTick = false;
 static uint32_t steps = 0;
-static  uint8_t wasBelow = false;
+static double distance = 0;
+static  uint8_t wasBelow = true;
+static uint8_t distanceToggle = false;
+static uint8_t unitsToggle = false;
+static uint8_t testMode = false;
+static uint32_t holdCounter = 0;
 
 /*******************************************
  *      Local prototypes
@@ -231,15 +251,34 @@ calculateMeanBuffer ()
 
 
 
+
 /********************************************************
  * main
  ********************************************************/
 int
 main (void)
 {
+    //Code for enabling Orbit Booster Switch 1
+
+    //**********************
+
+    SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOA);
+    GPIOPinTypeGPIOInput (GPIO_PORTA_BASE, GPIO_PIN_7);
+    GPIOPadConfigSet (GPIO_PORTA_BASE, GPIO_PIN_7, GPIO_STRENGTH_2MA,
+           GPIO_PIN_TYPE_STD_WPD);
+
+
+    //**********************
+
+
+    //Enabling floating point calculations
+    FPUEnable();
+
+    //**********************
 
     vector3_t acceleration_raw;
     vector3_t refOrientation;
+
 
     initClock ();
     initAccl ();
@@ -250,54 +289,106 @@ main (void)
     initCircBuf (&g_zinBuffer, BUF_SIZE);
     initSysTick ();
 
-    OLEDStringDraw ("Accelerometer", 0, 0);
-    int8_t upPushes = 0;
-    int16_t xToDisplay, yToDisplay, zToDisplay = 0;
+    OLEDStringDraw ("Total Steps", 0, 0);
 
     acceleration_raw = getAcclData();
     writeCircBuf (&g_xinBuffer, acceleration_raw.x);
     writeCircBuf (&g_yinBuffer, acceleration_raw.y);
     writeCircBuf (&g_zinBuffer, acceleration_raw.z);
     refOrientation = calculateMeanBuffer();
-
+    char* units = "km";
 
     while (1)
     {
+
+        //Code for reading the switch state
+
+        //**************************
+        bool switchState = (GPIOPinRead (GPIO_PORTA_BASE, GPIO_PIN_7) == GPIO_PIN_7);
+        if(switchState){
+            testMode = true;
+        }else{
+            testMode = false;
+        }
+        switchState = false;
+
+        //**************************
+
+        /*Code for held down button function using guidelines from
+        Project Demonstration Guidelines and Timetable 13 05 2020
+
+        */
+        //**************************
+
+        bool heldState = (GPIOPinRead (GPIO_PORTD_BASE, GPIO_PIN_2) == GPIO_PIN_2);
+        if(heldState){
+            holdCounter++;
+        }else{
+            holdCounter = 0;
+        }
+
+        if(holdCounter > HOLD_THRESHOLD){
+
+            distance = 0;
+            steps = 0;
+
+        }
+        heldState = false;
+
+
+        //**************************
+
         uint8_t butState;
         updateButtons ();
         butState = checkButton (UP);
         switch (butState)
         {
         case RELEASED:
-            upPushes = upPushes + 1;
+            if(testMode){
+                steps += TEST_MODE_STEPS_UP;
+                distance += TEST_MODE_DIST_UP;
+            }else
+            {
+            if(distanceToggle)
+            {
+            unitsToggle = !unitsToggle;
+            if(unitsToggle)
+            {
+                units = "mi.";
+            }
+            else
+            {
+                units = "km.";
+            }
+            }
             break;
+            }
         }
         butState = checkButton (DOWN);
         switch (butState)
         {
         case RELEASED:
-            refOrientation = calculateMeanBuffer();
+            if(testMode){
+                            steps -= TEST_MODE_STEPS_DOWN;
+                            distance -= TEST_MODE_DIST_DOWN;
+                        }
             break;
         }
 
-        char* units = "raw";
-
-        if (upPushes % 3 == 0) {
-            xToDisplay = acceleration_raw.x;
-            yToDisplay = acceleration_raw.y;
-            zToDisplay = acceleration_raw.z;
-            units = "raw";
-        } else if (upPushes % 3 == 1) {
-            xToDisplay = acceleration_raw.x * 4;
-            yToDisplay = acceleration_raw.y * 4;
-            zToDisplay = acceleration_raw.z * 4;
-            units = "mg";
-        } else {
-            xToDisplay = (acceleration_raw.x * 10) / 256;
-            yToDisplay = (acceleration_raw.y * 10) / 256;
-            zToDisplay = (acceleration_raw.z * 10) / 256;
-            units = "ms^2";
-        }
+        butState = checkButton (LEFT);
+                switch (butState)
+                {
+                case RELEASED:
+                    distanceToggle = !distanceToggle;
+                    break;
+                }
+        butState = checkButton (RIGHT);
+                switch (butState)
+                {
+                case RELEASED:
+                distanceToggle = !distanceToggle;
+                   break;
+                       }
 
         if (accTick)
         {
@@ -310,9 +401,45 @@ main (void)
 
             vector3_t meanBuffer = calculateMeanBuffer();
 
-            displayUpdate ("Accl", "X", xToDisplay, 1, units);
-            displayUpdate ("Accl", "Y", yToDisplay, 2, units);
-            displayUpdate ("Accl", "Z", zToDisplay, 3, units);
+            if(!distanceToggle){
+                displayUpdate("Total", "Steps", steps, 0, " ");
+            }
+            else{
+                if(unitsToggle){
+
+
+                displayUpdate("Dist.", "", distance*MILES_CONSTANT, 0, units);
+
+                }
+
+                else
+
+                {
+
+                 displayUpdate("Dist.", "", distance, 0, units);
+
+                }
+
+            }
+
+            //Calculation for total acceleration which then gets casted into a 16bit int
+            //******************
+
+            int16_t accelerationTotal = (int16_t) sqrt((acceleration_raw.x * 4)*(acceleration_raw.x * 4)+
+                                                 (acceleration_raw.y * 4)*(acceleration_raw.y * 4)+
+                                                 (acceleration_raw.z * 4)*(acceleration_raw.z * 4));
+
+            if((accelerationTotal > STEP_THRESHOLD) && (wasBelow)){
+                wasBelow = false;
+                steps++;
+                distance += STEP_LENGTH;
+            }
+
+            if((accelerationTotal < STEP_THRESHOLD) && (!wasBelow)){
+                wasBelow = true;
+            }
+
+            //******************
 
         }
 
