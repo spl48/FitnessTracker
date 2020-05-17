@@ -36,6 +36,8 @@ static circBuf_t g_yinBuffer;
 static circBuf_t g_zinBuffer;
 static uint32_t g_ulSampCnt;    // Counter for the interrupts
 volatile uint8_t accTick = false;
+static uint32_t steps = 0;
+static  uint8_t wasBelow = false;
 
 /*******************************************
  *      Local prototypes
@@ -227,6 +229,8 @@ calculateMeanBuffer ()
     return meanVector;
 }
 
+
+
 /********************************************************
  * main
  ********************************************************/
@@ -248,7 +252,7 @@ main (void)
 
     OLEDStringDraw ("Accelerometer", 0, 0);
     int8_t upPushes = 0;
-    int32_t xToDisplay, yToDisplay, zToDisplay = 0;
+    int16_t xToDisplay, yToDisplay, zToDisplay = 0;
 
     acceleration_raw = getAcclData();
     writeCircBuf (&g_xinBuffer, acceleration_raw.x);
@@ -284,10 +288,10 @@ main (void)
             zToDisplay = acceleration_raw.z;
             units = "raw";
         } else if (upPushes % 3 == 1) {
-            xToDisplay = acceleration_raw.x * 10;
-            yToDisplay = acceleration_raw.y * 10;
-            zToDisplay = acceleration_raw.z * 10;
-            units = "g";
+            xToDisplay = acceleration_raw.x * 4;
+            yToDisplay = acceleration_raw.y * 4;
+            zToDisplay = acceleration_raw.z * 4;
+            units = "mg";
         } else {
             xToDisplay = (acceleration_raw.x * 10) / 256;
             yToDisplay = (acceleration_raw.y * 10) / 256;
@@ -311,5 +315,6 @@ main (void)
             displayUpdate ("Accl", "Z", zToDisplay, 3, units);
 
         }
+
     }
 }
