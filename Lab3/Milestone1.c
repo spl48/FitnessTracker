@@ -297,7 +297,7 @@ main (void)
     initCircBuf (&g_zinBuffer, BUF_SIZE);
     initSysTick ();
 
-    OLEDStringDraw ("Total Steps", 0, 0);
+    OLEDStringDraw ("Num. Steps", 0, 0);
 
     acceleration_raw = getAcclData();
     writeCircBuf (&g_xinBuffer, acceleration_raw.x);
