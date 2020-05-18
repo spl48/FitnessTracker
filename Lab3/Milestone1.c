@@ -145,7 +145,13 @@ displayUpdate (char *str1, char *str2, double num, uint8_t charLine, char *units
     //  number field ensures it is displayed right justified.
     if (units != NULL) {
         int decimals = (num-intnum)*100;
-        usnprintf(text_buffer, sizeof(text_buffer), "%s %s %1d.%2d %s", str1, str2, intnum, decimals, units);
+
+        if (decimals < 10) { //Display a 0 in front of the decimal
+            usnprintf(text_buffer, sizeof(text_buffer), "%s %s %1d.0%1d %s", str1, str2, intnum, decimals, units);
+
+        } else {
+            usnprintf(text_buffer, sizeof(text_buffer), "%s %s %1d.%2d %s", str1, str2, intnum, decimals, units);
+        }
     } else {
         usnprintf(text_buffer, sizeof(text_buffer), "%s %s %3d %s", str1, str2, intnum, units);
     }
