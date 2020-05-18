@@ -158,7 +158,6 @@ displayUpdate (char *str1, char *str2, double num, uint8_t charLine, char *units
     // Update line on display.
     OLEDStringDraw (text_buffer, 0, charLine);
 }
-
 /*********************************************************
  * initAccl
  *********************************************************/
@@ -345,7 +344,6 @@ main (void)
 
             distance = 0;
             steps = 0;
-
         }
         heldState = false;
 
@@ -383,12 +381,35 @@ main (void)
         {
         case RELEASED:
             if(testMode){
-                            steps -= TEST_MODE_STEPS_DOWN;
-                            distance -= TEST_MODE_DIST_DOWN;
+                if(steps < TEST_MODE_STEPS_DOWN)
+                {
+                    steps = 0;
+                    if(distance < TEST_MODE_DIST_DOWN)
+                    {
+                        distance = 0;
+                    }
+                    else
+                    {
+                        distance-=TEST_MODE_DIST_DOWN;
+                    }
+                }
+                else {
+                    if
+                    (distance < TEST_MODE_DIST_DOWN)
+                    {
+                    distance = 0;
+                    steps -= TEST_MODE_STEPS_DOWN;
+                    }
+                    else
+                    {
+                    distance-=TEST_MODE_DIST_DOWN;
+                    steps -= TEST_MODE_STEPS_DOWN;
+                    }
+
                         }
             break;
         }
-
+        }
         butState = checkButton (LEFT);
                 switch (butState)
                 {
