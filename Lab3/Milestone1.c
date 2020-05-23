@@ -33,9 +33,7 @@
 #define MILES_CONSTANT 0.6213712
 
 #define TEST_MODE_STEPS_UP 100
-#define TEST_MODE_DIST_UP 0.09
 #define TEST_MODE_STEPS_DOWN 500
-#define TEST_MODE_DIST_DOWN 0.45
 
 #define HOLD_THRESHOLD 100000
 
@@ -53,7 +51,6 @@ static circBuf_t g_yinBuffer;
 static circBuf_t g_zinBuffer;
 volatile uint8_t accTick = false;
 static uint32_t steps = 0;
-static double distance = 0;
 static  uint8_t wasBelow = true;
 static uint8_t distanceToggle = false;
 static uint8_t unitsToggle = false;
@@ -195,6 +192,7 @@ main (void)
     writeCircBuf (&g_zinBuffer, acceleration_raw.z);
     char* units = "km";
 
+    // MAIN LOOP
     while (1)
     {
 
@@ -225,8 +223,6 @@ main (void)
         }
 
         if(holdCounter > HOLD_THRESHOLD){
-
-            distance = 0;
             steps = 0;
         }
         heldState = false;
@@ -242,7 +238,6 @@ main (void)
         case RELEASED:
             if(testMode){
                 steps += TEST_MODE_STEPS_UP;
-                distance += TEST_MODE_DIST_UP;
             }else
             {
             if(distanceToggle)
@@ -268,31 +263,12 @@ main (void)
                 if(steps < TEST_MODE_STEPS_DOWN)
                 {
                     steps = 0;
-                    if(distance < TEST_MODE_DIST_DOWN)
-                    {
-                        distance = 0;
-                    }
-                    else
-                    {
-                        distance-=TEST_MODE_DIST_DOWN;
-                    }
                 }
                 else {
-                    if
-                    (distance < TEST_MODE_DIST_DOWN)
-                    {
-                    distance = 0;
                     steps -= TEST_MODE_STEPS_DOWN;
-                    }
-                    else
-                    {
-                    distance-=TEST_MODE_DIST_DOWN;
-                    steps -= TEST_MODE_STEPS_DOWN;
-                    }
-
-                        }
+                }
             break;
-        }
+            }
         }
         butState = checkButton (LEFT);
                 switch (butState)
@@ -307,7 +283,7 @@ main (void)
                 case RELEASED:
                 distanceToggle = !distanceToggle;
                    break;
-                       }
+                }
 
         if (accTick)
         {
@@ -327,7 +303,7 @@ main (void)
                 if(unitsToggle){
 
 
-                displayUpdate("Dist.", "", distance*MILES_CONSTANT, 0, units);
+                displayUpdate("Dist.", "", steps*STEP_LENGTH*MILES_CONSTANT, 0, units);
 
                 }
 
@@ -335,7 +311,7 @@ main (void)
 
                 {
 
-                 displayUpdate("Dist.", "", distance, 0, units);
+                 displayUpdate("Dist.", "", steps*STEP_LENGTH, 0, units);
 
                 }
 
@@ -351,7 +327,6 @@ main (void)
             if((accelerationTotal > STEP_THRESHOLD) && (wasBelow)){
                 wasBelow = false;
                 steps++;
-                distance += STEP_LENGTH;
             }
 
             if((accelerationTotal < STEP_THRESHOLD) && (!wasBelow)){
