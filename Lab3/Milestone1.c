@@ -18,6 +18,7 @@
 #include "circBufT.h"
 #include "buttons4.h"
 #include "driverlib/fpu.h"
+#include "display.h"
 
 #define BUF_SIZE 10
 #define SAMPLE_RATE_HZ 10
@@ -49,7 +50,6 @@ typedef struct{
 static circBuf_t g_xinBuffer;        // Buffer of size BUF_SIZE integers (sample values)
 static circBuf_t g_yinBuffer;
 static circBuf_t g_zinBuffer;
-static uint32_t g_ulSampCnt;    // Counter for the interrupts
 volatile uint8_t accTick = false;
 static uint32_t steps = 0;
 static double distance = 0;
@@ -117,47 +117,7 @@ initClock (void)
                    SYSCTL_XTAL_16MHZ);
 }
 
-/*********************************************************
- * initDisplay
- *********************************************************/
-void
-initDisplay (void)
-{
-    // Initialise the Orbit OLED display
-    OLEDInitialise ();
-}
 
-//*****************************************************************************
-// Function to display a changing message on the display.
-// The display has 4 rows of 16 characters, with 0, 0 at top left.
-//*****************************************************************************
-void
-displayUpdate (char *str1, char *str2, double num, uint8_t charLine, char *units)
-{
-    char text_buffer[17];           //Display fits 16 characters wide.
-
-    int intnum = num;
-
-
-    // "Undraw" the previous contents of the line to be updated.
-    OLEDStringDraw ("                ", 0, charLine);
-    // Form a new string for the line.  The maximum width specified for the
-    //  number field ensures it is displayed right justified.
-    if (units != NULL) {
-        int decimals = (num-intnum)*100;
-
-        if (decimals < 10) { //Display a 0 in front of the decimal
-            usnprintf(text_buffer, sizeof(text_buffer), "%s %s %1d.0%1d %s", str1, str2, intnum, decimals, units);
-
-        } else {
-            usnprintf(text_buffer, sizeof(text_buffer), "%s %s %1d.%2d %s", str1, str2, intnum, decimals, units);
-        }
-    } else {
-        usnprintf(text_buffer, sizeof(text_buffer), "%s %s %3d %s", str1, str2, intnum, units);
-    }
-    // Update line on display.
-    OLEDStringDraw (text_buffer, 0, charLine);
-}
 /*********************************************************
  * initAccl
  *********************************************************/
@@ -262,6 +222,21 @@ calculateMeanBuffer ()
     return meanVector;
 }
 
+/********************************************************
+ * Function to run all initialisation functions
+ ********************************************************/
+void
+initialiseAll (void)
+{
+    initClock ();
+    initAccl ();
+    initDisplay ();
+    initButtons ();
+    initCircBuf (&g_xinBuffer, BUF_SIZE);
+    initCircBuf (&g_yinBuffer, BUF_SIZE);
+    initCircBuf (&g_zinBuffer, BUF_SIZE);
+    initSysTick ();
+}
 
 
 
@@ -290,17 +265,8 @@ main (void)
     //**********************
 
     vector3_t acceleration_raw;
-    vector3_t refOrientation;
 
-
-    initClock ();
-    initAccl ();
-    initDisplay ();
-    initButtons ();
-    initCircBuf (&g_xinBuffer, BUF_SIZE);
-    initCircBuf (&g_yinBuffer, BUF_SIZE);
-    initCircBuf (&g_zinBuffer, BUF_SIZE);
-    initSysTick ();
+    initialiseAll();
 
     OLEDStringDraw ("Num. Steps", 0, 0);
 
@@ -308,7 +274,6 @@ main (void)
     writeCircBuf (&g_xinBuffer, acceleration_raw.x);
     writeCircBuf (&g_yinBuffer, acceleration_raw.y);
     writeCircBuf (&g_zinBuffer, acceleration_raw.z);
-    refOrientation = calculateMeanBuffer();
     char* units = "km";
 
     while (1)
