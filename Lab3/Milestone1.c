@@ -52,10 +52,11 @@ static circBuf_t g_zinBuffer;
 volatile uint8_t accTick = false;
 static uint32_t steps = 0;
 static  uint8_t wasBelow = true;
-static uint8_t distanceToggle = false;
+static uint8_t distanceScreen = false;
 static uint8_t unitsToggle = false;
 static uint8_t testMode = false;
 static uint32_t holdCounter = 0;
+static char units[2][10] = {"km.", "mi."};
 
 /*******************************************
  *      Local prototypes
@@ -154,6 +155,22 @@ initialiseAll (void)
     initSysTick ();
 }
 
+/********************************************************
+ * Checks SW1 and sets testMode true if it is switched up to indicate the board is in test mode.
+ * Sets false if not switched up to indicate board in standard use mode
+ ********************************************************/
+void
+checkBoardMode(void)
+{
+    bool switchState = (GPIOPinRead (GPIO_PORTA_BASE, GPIO_PIN_7) == GPIO_PIN_7);
+    if(switchState){
+        testMode = true;
+    }else{
+        testMode = false;
+    }
+    switchState = false;
+}
+
 
 
 /********************************************************
@@ -178,34 +195,23 @@ main (void)
     //Enabling floating point calculations
     FPUEnable();
 
-    //**********************
+    /**********************
+    * Initialise
+    **/
 
     vector3_t acceleration_raw;
-
     initialiseAll();
-
-    OLEDStringDraw ("Num. Steps", 0, 0);
-
+    OLEDStringDraw ("Num. Steps", steps, 0);
     acceleration_raw = getAcclData();
     writeCircBuf (&g_xinBuffer, acceleration_raw.x);
     writeCircBuf (&g_yinBuffer, acceleration_raw.y);
     writeCircBuf (&g_zinBuffer, acceleration_raw.z);
-    char* units = "km";
+    char* unit = units[unitsToggle];
 
     // MAIN LOOP
     while (1)
     {
-
-        //Code for reading the switch state
-
-        //**************************
-        bool switchState = (GPIOPinRead (GPIO_PORTA_BASE, GPIO_PIN_7) == GPIO_PIN_7);
-        if(switchState){
-            testMode = true;
-        }else{
-            testMode = false;
-        }
-        switchState = false;
+        checkBoardMode();
 
         //**************************
 
@@ -238,22 +244,15 @@ main (void)
         case RELEASED:
             if(testMode){
                 steps += TEST_MODE_STEPS_UP;
-            }else
-            {
-            if(distanceToggle)
-            {
-            unitsToggle = !unitsToggle;
-            if(unitsToggle)
-            {
-                units = "mi.";
             }
             else
             {
-                units = "km.";
-            }
-            }
-            break;
-            }
+                if(distanceScreen)
+                {
+                    unitsToggle = !unitsToggle;
+                }
+                break;
+                }
         }
         butState = checkButton (DOWN);
         switch (butState)
@@ -274,15 +273,15 @@ main (void)
                 switch (butState)
                 {
                 case RELEASED:
-                    distanceToggle = !distanceToggle;
+                    distanceScreen = !distanceScreen;
                     break;
                 }
         butState = checkButton (RIGHT);
                 switch (butState)
                 {
-                case RELEASED:
-                distanceToggle = !distanceToggle;
-                   break;
+                    case RELEASED:
+                    distanceScreen = !distanceScreen;
+                    break;
                 }
 
         if (accTick)
@@ -296,25 +295,20 @@ main (void)
 
             vector3_t meanBuffer = calculateMeanBuffer();
 
-            if(!distanceToggle){
+            if(!distanceScreen)
+            {
                 displayUpdate("Num.", "Steps", steps, 0, NULL);
             }
-            else{
-                if(unitsToggle){
-
-
-                displayUpdate("Dist.", "", steps*STEP_LENGTH*MILES_CONSTANT, 0, units);
-
-                }
-
-                else
-
+            else
+            {
+                if(unitsToggle) //Miles
                 {
-
-                 displayUpdate("Dist.", "", steps*STEP_LENGTH, 0, units);
-
+                    displayUpdate("Dist.", "", steps*STEP_LENGTH*MILES_CONSTANT, 0, units[unitsToggle]);
                 }
-
+                else //Kilometers
+                {
+                    displayUpdate("Dist.", "", steps*STEP_LENGTH, 0, units[unitsToggle]);
+                }
             }
 
             //Calculation for total acceleration which then gets casted into a 16bit int
@@ -324,12 +318,14 @@ main (void)
                                                  (acceleration_raw.y * 4)*(acceleration_raw.y * 4)+
                                                  (acceleration_raw.z * 4)*(acceleration_raw.z * 4));
 
-            if((accelerationTotal > STEP_THRESHOLD) && (wasBelow)){
+            if((accelerationTotal > STEP_THRESHOLD) && (wasBelow))
+            {
                 wasBelow = false;
                 steps++;
             }
 
-            if((accelerationTotal < STEP_THRESHOLD) && (!wasBelow)){
+            if((accelerationTotal < STEP_THRESHOLD) && (!wasBelow))
+            {
                 wasBelow = true;
             }
 
