@@ -15,16 +15,15 @@
 
 
 // *******************************************************
-// initButtons: Initialise the variables associated with the set of buttons
-// defined by the constants above.
+// Initialise the Orbit OLED display
+// *******************************************************
 void
 initDisplay (void);
 
-// *******************************************************
-// updateButtons: Function designed to be called regularly. It polls all
-// buttons once and updates variables associated with the buttons if
-// necessary.  It is efficient enough to be part of an ISR, e.g. from
-// a SysTick interrupt.
+//*****************************************************************************
+// Function to display a changing message on the Orbit OLED display.
+// The display has 4 rows of 16 characters, with 0, 0 at top left.
+//*****************************************************************************
 void
 displayUpdate (char *str1, char *str2, double num, uint8_t charLine, char *units);
 
