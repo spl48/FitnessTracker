@@ -1,3 +1,11 @@
+/* FitnessTue9Group7
+ *
+ * display.c
+ *
+ *  Created on: 23/05/2020
+ *      Author: Sean & Nick
+ */
+
 #include <stdint.h>
 #include <stdbool.h>
 #include <stdlib.h>

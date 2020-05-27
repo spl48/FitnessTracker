@@ -1,10 +1,13 @@
 #ifndef DISPLAY_H_
 #define DISPLAY_H_
 
-// *******************************************************
-// display.h
-//
-// *******************************************************
+/* FitnessTue9Group7
+ *
+ * display.h
+ *
+ *  Created on: 23/05/2020
+ *      Author: Sean & Nick
+ */
 
 #include <stdint.h>
 #include <stdbool.h>

@@ -1,8 +1,9 @@
-/*
+/* FitnessTue9Group7
+ *
  * accelerometer.h
  *
  *  Created on: 23/05/2020
- *      Author: Sean
+ *      Author: Sean & Nick
  */
 
 #ifndef ACCELEROMETER_H_

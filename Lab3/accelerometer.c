@@ -1,9 +1,11 @@
-/*
+/* FitnessTue9Group7
+ *
  * accelerometer.c
  *
  *  Created on: 23/05/2020
- *      Author:
+ *      Author: Sean & Nick
  */
+
 #include <stdint.h>
 #include <stdbool.h>
 #include <stdlib.h>
