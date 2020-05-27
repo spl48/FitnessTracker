@@ -43,20 +43,22 @@ typedef struct{
     int16_t z;
 } vector3_t;
 
+
 //*****************************************************************************
 // Global variables
 //*****************************************************************************
-static circBuf_t g_xinBuffer;        // Buffer of size BUF_SIZE integers (sample values)
+static circBuf_t g_xinBuffer;
 static circBuf_t g_yinBuffer;
 static circBuf_t g_zinBuffer;
 volatile uint8_t accTick = false;
 static uint32_t steps = 0;
 static  uint8_t wasBelow = true;
-static uint8_t distanceScreen = false;
-static uint8_t unitsToggle = false;
+static uint8_t distanceScreen = false; //true when board is displaying distance screen
 static uint8_t testMode = false;
 static uint32_t holdCounter = 0;
-static char units[2][10] = {"km.", "mi."};
+static uint8_t unitsToggle = false; //false when kilometers, true when miles
+static char units[2][10] = {"km.", "mi."};  //Array of the units that can be displayed
+
 
 /*******************************************
  *      Local prototypes
@@ -67,6 +69,7 @@ void displayUpdate (char *str1, char *str2, double num, uint8_t charLine, char *
 void initAccl (void);
 vector3_t getAcclData (void);
 void SysTickIntHandler (void);
+
 
 //*******************************************************************
 //
@@ -87,6 +90,12 @@ SysTickIntHandler (void)
 
 }
 
+
+//*******************************************************************
+//
+// Initialise the SysTick timer
+//
+//*******************************************************************
 void
 initSysTick (void)
 {
@@ -103,10 +112,9 @@ initSysTick (void)
     SysTickEnable ();
 }
 
+
 /***********************************************************
- * Initialisation functions: clock, SysTick, PWM
- ***********************************************************
- * Clock
+ * Initialise the clock
  ***********************************************************/
 void
 initClock (void)
@@ -117,8 +125,11 @@ initClock (void)
 }
 
 
-
-
+//*******************************************************************
+//
+// Calculates the mean of the x,y, and z buffer and returns a 3 space vector vector3_t of the results
+//
+//*******************************************************************
 vector3_t
 calculateMeanBuffer ()
 {
@@ -139,6 +150,7 @@ calculateMeanBuffer ()
     return meanVector;
 }
 
+
 /********************************************************
  * Function to run all initialisation functions
  ********************************************************/
@@ -155,6 +167,7 @@ initialiseAll (void)
     initSysTick ();
 }
 
+
 /********************************************************
  * Checks SW1 and sets testMode true if it is switched up to indicate the board is in test mode.
  * Sets false if not switched up to indicate board in standard use mode
@@ -163,50 +176,38 @@ void
 checkBoardMode(void)
 {
     bool switchState = (GPIOPinRead (GPIO_PORTA_BASE, GPIO_PIN_7) == GPIO_PIN_7);
-    if(switchState){
+    if(switchState)
+    {
         testMode = true;
-    }else{
+    }
+    else
+    {
         testMode = false;
     }
+
     switchState = false;
 }
 
 
-
 /********************************************************
- * main
+ * Main
  ********************************************************/
 int
 main (void)
 {
     //Code for enabling Orbit Booster Switch 1
-
-    //**********************
-
     SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOA);
     GPIOPinTypeGPIOInput (GPIO_PORTA_BASE, GPIO_PIN_7);
-    GPIOPadConfigSet (GPIO_PORTA_BASE, GPIO_PIN_7, GPIO_STRENGTH_2MA,
-           GPIO_PIN_TYPE_STD_WPD);
-
-
-    //**********************
-
-
-    //Enabling floating point calculations
-    FPUEnable();
-
-    /**********************
-    * Initialise
-    **/
+    GPIOPadConfigSet (GPIO_PORTA_BASE, GPIO_PIN_7, GPIO_STRENGTH_2MA, GPIO_PIN_TYPE_STD_WPD);
+    FPUEnable();  //Enabling floating point calculations
 
     vector3_t acceleration_raw;
     initialiseAll();
-    OLEDStringDraw ("Num. Steps", steps, 0);
+    displayUpdate("Num.", "Steps", steps, 0, NULL);
     acceleration_raw = getAcclData();
     writeCircBuf (&g_xinBuffer, acceleration_raw.x);
     writeCircBuf (&g_yinBuffer, acceleration_raw.y);
     writeCircBuf (&g_zinBuffer, acceleration_raw.z);
-    char* unit = units[unitsToggle];
 
     // MAIN LOOP
     while (1)
@@ -222,68 +223,83 @@ main (void)
         //**************************
 
         bool heldState = (GPIOPinRead (GPIO_PORTD_BASE, GPIO_PIN_2) == GPIO_PIN_2);
-        if(heldState){
+        if(heldState)
+        {
             holdCounter++;
-        }else{
+        }
+        else
+        {
             holdCounter = 0;
         }
 
-        if(holdCounter > HOLD_THRESHOLD){
+        if(holdCounter > HOLD_THRESHOLD)
+        {
             steps = 0;
         }
+
         heldState = false;
 
 
         //**************************
-
+        //Check the buttons and carries out the corresponding actions if a button is pushed
+        //**************************
         uint8_t butState;
         updateButtons ();
+
         butState = checkButton (UP);
         switch (butState)
         {
-        case RELEASED:
-            if(testMode){
-                steps += TEST_MODE_STEPS_UP;
-            }
-            else
-            {
-                if(distanceScreen)
+            case RELEASED:
+                if(testMode)
+                {
+                    steps += TEST_MODE_STEPS_UP;
+                }
+                else if (distanceScreen)
                 {
                     unitsToggle = !unitsToggle;
                 }
+
                 break;
-                }
         }
+
         butState = checkButton (DOWN);
         switch (butState)
         {
-        case RELEASED:
-            if(testMode){
-                if(steps < TEST_MODE_STEPS_DOWN)
+            case RELEASED:
+                if(testMode)
                 {
-                    steps = 0;
-                }
-                else {
-                    steps -= TEST_MODE_STEPS_DOWN;
-                }
-            break;
-            }
-        }
-        butState = checkButton (LEFT);
-                switch (butState)
-                {
-                case RELEASED:
-                    distanceScreen = !distanceScreen;
-                    break;
-                }
-        butState = checkButton (RIGHT);
-                switch (butState)
-                {
-                    case RELEASED:
-                    distanceScreen = !distanceScreen;
-                    break;
-                }
+                    if(steps < TEST_MODE_STEPS_DOWN)
+                    {
+                        steps = 0;
+                    }
+                    else
+                    {
+                        steps -= TEST_MODE_STEPS_DOWN;
+                    }
 
+                break;
+                }
+        }
+
+        butState = checkButton (LEFT);
+        switch (butState)
+        {
+            case RELEASED:
+                distanceScreen = !distanceScreen;
+                break;
+        }
+
+        butState = checkButton (RIGHT);
+        switch (butState)
+        {
+            case RELEASED:
+            distanceScreen = !distanceScreen;
+            break;
+        }
+
+        //**************************
+        // If tick counter then check accelerometer for a step and update display
+        //**************************
         if (accTick)
         {
             accTick = false;
@@ -311,6 +327,7 @@ main (void)
                 }
             }
 
+            //******************
             //Calculation for total acceleration which then gets casted into a 16bit int
             //******************
 
