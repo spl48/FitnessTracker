@@ -1,3 +1,11 @@
+/* FitnessTue9Group7
+ *
+ * FitnessMonitor.c
+ *
+ *  Created on: 15/03/2020
+ *      Author: Sean & Nick
+ */
+
 #include <stdint.h>
 #include <stdbool.h>
 #include <stdlib.h>
@@ -190,6 +198,163 @@ checkBoardMode(void)
 
 
 /********************************************************
+ * Checks the reset button is being held down. If so adds to the holdCounter. If the counter exceeds the threshold, steps are reset
+ ********************************************************/
+void
+checkResetButton(void)
+{
+
+    /*Code for held down button function using guidelines from
+    Project Demonstration Guidelines and Timetable 13 05 2020
+
+    */
+
+    bool heldState = (GPIOPinRead (GPIO_PORTD_BASE, GPIO_PIN_2) == GPIO_PIN_2);
+    if(heldState)
+    {
+        holdCounter++;
+    }
+    else
+    {
+        holdCounter = 0;
+    }
+
+    if(holdCounter > HOLD_THRESHOLD)
+    {
+        steps = 0;
+    }
+
+    heldState = false;
+}
+
+
+/**************************
+*Check the buttons and carries out the corresponding actions if a button is pushed
+**************************/
+void
+checkOtherButtons(void)
+{
+    uint8_t butState;
+    updateButtons ();
+
+    butState = checkButton (UP);
+    switch (butState)
+    {
+        case RELEASED:
+            if(testMode)
+            {
+                steps += TEST_MODE_STEPS_UP;
+            }
+            else if (distanceScreen)
+            {
+                unitsToggle = !unitsToggle;
+            }
+
+            break;
+    }
+
+    butState = checkButton (DOWN);
+    switch (butState)
+    {
+        case RELEASED:
+            if(testMode)
+            {
+                if(steps < TEST_MODE_STEPS_DOWN)
+                {
+                    steps = 0;
+                }
+                else
+                {
+                    steps -= TEST_MODE_STEPS_DOWN;
+                }
+
+            break;
+            }
+    }
+
+    butState = checkButton (LEFT);
+    switch (butState)
+    {
+        case RELEASED:
+            distanceScreen = !distanceScreen;
+            break;
+    }
+
+    butState = checkButton (RIGHT);
+    switch (butState)
+    {
+        case RELEASED:
+        distanceScreen = !distanceScreen;
+        break;
+    }
+}
+
+/**************************
+* Refreshes the display to show the correct and updated information
+**************************/
+void
+refreshDisplay(void)
+{
+    if(!distanceScreen)
+    {
+        displayUpdate("Num.", "Steps", steps, 0, NULL);
+    }
+    else
+    {
+        if(unitsToggle) //Miles
+        {
+            displayUpdate("Dist.", "", steps*STEP_LENGTH*MILES_CONSTANT, 0, units[unitsToggle]);
+        }
+        else //Kilometers
+        {
+            displayUpdate("Dist.", "", steps*STEP_LENGTH, 0, units[unitsToggle]);
+        }
+    }
+}
+
+
+/**************************
+* Writes the new acceleration values to the circular buffer
+**************************/
+void
+updateBuffer(vector3_t acceleration_raw)
+{
+    writeCircBuf (&g_xinBuffer, acceleration_raw.x);
+    writeCircBuf (&g_yinBuffer, acceleration_raw.y);
+    writeCircBuf (&g_zinBuffer, acceleration_raw.z);
+
+    vector3_t meanBuffer = calculateMeanBuffer();
+}
+
+
+/**************************
+* Checks if the norm of acceleration exceeds 1.5g and was below 1.5g at last check. If so adds a step.
+**************************/
+void
+checkIfStep(vector3_t acceleration_raw)
+{
+    //******************
+    //Calculation for total acceleration which then gets casted into a 16bit int
+    //******************
+
+    int16_t accelerationTotal = (int16_t) sqrt((acceleration_raw.x * 4)*(acceleration_raw.x * 4)+
+                                         (acceleration_raw.y * 4)*(acceleration_raw.y * 4)+
+                                         (acceleration_raw.z * 4)*(acceleration_raw.z * 4));
+
+    if((accelerationTotal > STEP_THRESHOLD) && (wasBelow))
+    {
+        wasBelow = false;
+        steps++;
+    }
+
+    if((accelerationTotal < STEP_THRESHOLD) && (!wasBelow))
+    {
+        wasBelow = true;
+    }
+}
+
+
+/********************************************************
  * Main
  ********************************************************/
 int
@@ -214,88 +379,9 @@ main (void)
     {
         checkBoardMode();
 
-        //**************************
+        checkResetButton();
 
-        /*Code for held down button function using guidelines from
-        Project Demonstration Guidelines and Timetable 13 05 2020
-
-        */
-        //**************************
-
-        bool heldState = (GPIOPinRead (GPIO_PORTD_BASE, GPIO_PIN_2) == GPIO_PIN_2);
-        if(heldState)
-        {
-            holdCounter++;
-        }
-        else
-        {
-            holdCounter = 0;
-        }
-
-        if(holdCounter > HOLD_THRESHOLD)
-        {
-            steps = 0;
-        }
-
-        heldState = false;
-
-
-        //**************************
-        //Check the buttons and carries out the corresponding actions if a button is pushed
-        //**************************
-        uint8_t butState;
-        updateButtons ();
-
-        butState = checkButton (UP);
-        switch (butState)
-        {
-            case RELEASED:
-                if(testMode)
-                {
-                    steps += TEST_MODE_STEPS_UP;
-                }
-                else if (distanceScreen)
-                {
-                    unitsToggle = !unitsToggle;
-                }
-
-                break;
-        }
-
-        butState = checkButton (DOWN);
-        switch (butState)
-        {
-            case RELEASED:
-                if(testMode)
-                {
-                    if(steps < TEST_MODE_STEPS_DOWN)
-                    {
-                        steps = 0;
-                    }
-                    else
-                    {
-                        steps -= TEST_MODE_STEPS_DOWN;
-                    }
-
-                break;
-                }
-        }
-
-        butState = checkButton (LEFT);
-        switch (butState)
-        {
-            case RELEASED:
-                distanceScreen = !distanceScreen;
-                break;
-        }
-
-        butState = checkButton (RIGHT);
-        switch (butState)
-        {
-            case RELEASED:
-            distanceScreen = !distanceScreen;
-            break;
-        }
+        checkOtherButtons();
 
         //**************************
         // If tick counter then check accelerometer for a step and update display
@@ -305,49 +391,11 @@ main (void)
             accTick = false;
             acceleration_raw = getAcclData();
 
-            writeCircBuf (&g_xinBuffer, acceleration_raw.x);
-            writeCircBuf (&g_yinBuffer, acceleration_raw.y);
-            writeCircBuf (&g_zinBuffer, acceleration_raw.z);
+            updateBuffer(acceleration_raw);
 
-            vector3_t meanBuffer = calculateMeanBuffer();
+            refreshDisplay();
 
-            if(!distanceScreen)
-            {
-                displayUpdate("Num.", "Steps", steps, 0, NULL);
-            }
-            else
-            {
-                if(unitsToggle) //Miles
-                {
-                    displayUpdate("Dist.", "", steps*STEP_LENGTH*MILES_CONSTANT, 0, units[unitsToggle]);
-                }
-                else //Kilometers
-                {
-                    displayUpdate("Dist.", "", steps*STEP_LENGTH, 0, units[unitsToggle]);
-                }
-            }
-
-            //******************
-            //Calculation for total acceleration which then gets casted into a 16bit int
-            //******************
-
-            int16_t accelerationTotal = (int16_t) sqrt((acceleration_raw.x * 4)*(acceleration_raw.x * 4)+
-                                                 (acceleration_raw.y * 4)*(acceleration_raw.y * 4)+
-                                                 (acceleration_raw.z * 4)*(acceleration_raw.z * 4));
-
-            if((accelerationTotal > STEP_THRESHOLD) && (wasBelow))
-            {
-                wasBelow = false;
-                steps++;
-            }
-
-            if((accelerationTotal < STEP_THRESHOLD) && (!wasBelow))
-            {
-                wasBelow = true;
-            }
-
-            //******************
-
+            checkIfStep(acceleration_raw);
         }
 
     }
