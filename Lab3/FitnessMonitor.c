@@ -372,19 +372,18 @@ main (void)
 
         checkButtons();
 
+        acceleration_raw = getAcclData();
+        updateBuffer(acceleration_raw);
+        checkIfStep(acceleration_raw);
+
         //**************************
         // If tick counter then check accelerometer for a step and update display
         //**************************
         if (accTick)
         {
             accTick = false;
-            acceleration_raw = getAcclData();
-
-            updateBuffer(acceleration_raw);
 
             refreshDisplay();
-
-            checkIfStep(acceleration_raw);
         }
 
     }
