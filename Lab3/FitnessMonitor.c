@@ -289,6 +289,7 @@ checkOtherButtons(void)
     }
 }
 
+
 /**************************
 * Refreshes the display to show the correct and updated information
 **************************/
@@ -383,19 +384,19 @@ main (void)
 
         checkOtherButtons();
 
+        acceleration_raw = getAcclData();
+        checkIfStep(acceleration_raw);
+
         //**************************
-        // If tick counter then check accelerometer for a step and update display
+        // If tick counter then update display
         //**************************
         if (accTick)
         {
             accTick = false;
-            acceleration_raw = getAcclData();
-
-            updateBuffer(acceleration_raw);
 
             refreshDisplay();
 
-            checkIfStep(acceleration_raw);
+
         }
 
     }
