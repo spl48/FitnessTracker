@@ -28,6 +28,7 @@
 #include "driverlib/fpu.h"
 #include "display.h"
 #include "accelerometer.h"
+#include "switch.h"
 
 #define BUF_SIZE 10
 #define SAMPLE_RATE_HZ 10
@@ -66,6 +67,7 @@ static uint8_t testMode = false;
 static uint32_t holdCounter = 0;
 static uint8_t unitsToggle = false; //false when kilometers, true when miles
 static char units[2][10] = {"km.", "mi."};  //Array of the units that can be displayed
+static vector3_t acceleration_raw;
 
 
 /*******************************************
@@ -165,6 +167,7 @@ calculateMeanBuffer ()
 void
 initialiseAll (void)
 {
+
     initClock ();
     initAccl ();
     initDisplay ();
@@ -173,6 +176,12 @@ initialiseAll (void)
     initCircBuf (&g_yinBuffer, BUF_SIZE);
     initCircBuf (&g_zinBuffer, BUF_SIZE);
     initSysTick ();
+    initSwitch ();
+    displayUpdate("Num.", "Steps", steps, 0, NULL);
+    acceleration_raw = getAcclData();
+    writeCircBuf (&g_xinBuffer, acceleration_raw.x);
+    writeCircBuf (&g_yinBuffer, acceleration_raw.y);
+    writeCircBuf (&g_zinBuffer, acceleration_raw.z);
 }
 
 
@@ -196,43 +205,8 @@ checkBoardMode(void)
     switchState = false;
 }
 
-
-/********************************************************
- * Checks the reset button is being held down. If so adds to the holdCounter. If the counter exceeds the threshold, steps are reset
- ********************************************************/
 void
-checkResetButton(void)
-{
-
-    /*Code for held down button function using guidelines from
-    Project Demonstration Guidelines and Timetable 13 05 2020
-
-    */
-
-    bool heldState = (GPIOPinRead (GPIO_PORTD_BASE, GPIO_PIN_2) == GPIO_PIN_2);
-    if(heldState)
-    {
-        holdCounter++;
-    }
-    else
-    {
-        holdCounter = 0;
-    }
-
-    if(holdCounter > HOLD_THRESHOLD)
-    {
-        steps = 0;
-    }
-
-    heldState = false;
-}
-
-
-/**************************
-*Check the buttons and carries out the corresponding actions if a button is pushed
-**************************/
-void
-checkOtherButtons(void)
+checkButtons(void)
 {
     uint8_t butState;
     updateButtons ();
@@ -253,25 +227,6 @@ checkOtherButtons(void)
             break;
     }
 
-    butState = checkButton (DOWN);
-    switch (butState)
-    {
-        case RELEASED:
-            if(testMode)
-            {
-                if(steps < TEST_MODE_STEPS_DOWN)
-                {
-                    steps = 0;
-                }
-                else
-                {
-                    steps -= TEST_MODE_STEPS_DOWN;
-                }
-
-            break;
-            }
-    }
-
     butState = checkButton (LEFT);
     switch (butState)
     {
@@ -287,6 +242,54 @@ checkOtherButtons(void)
         distanceScreen = !distanceScreen;
         break;
     }
+
+    bool heldState = (GPIOPinRead (GPIO_PORTD_BASE, GPIO_PIN_2) == GPIO_PIN_2);
+           if(heldState)
+           {
+               holdCounter++;
+           }
+           else
+           {
+               holdCounter = 0;
+           }
+
+           if(holdCounter > HOLD_THRESHOLD)
+           {
+               if(testMode)
+               {
+
+               }
+               else
+               {
+                   steps = 0;
+               }
+
+           }
+           butState = checkButton (DOWN);
+
+               switch (butState)
+            {
+                case RELEASED:
+                    if(holdCounter < HOLD_THRESHOLD)
+                    {
+
+                    if(testMode)
+
+                    {
+                        if(steps < TEST_MODE_STEPS_DOWN)
+                        {
+                            steps = 0;
+                        }
+                        else
+                        {
+                            steps -= TEST_MODE_STEPS_DOWN;
+                        }
+
+                    break;
+                    }
+            }
+            }
+        heldState = false;
 }
 
 
@@ -361,42 +364,27 @@ checkIfStep(vector3_t acceleration_raw)
 int
 main (void)
 {
-    //Code for enabling Orbit Booster Switch 1
-    SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOA);
-    GPIOPinTypeGPIOInput (GPIO_PORTA_BASE, GPIO_PIN_7);
-    GPIOPadConfigSet (GPIO_PORTA_BASE, GPIO_PIN_7, GPIO_STRENGTH_2MA, GPIO_PIN_TYPE_STD_WPD);
-    FPUEnable();  //Enabling floating point calculations
-
-    vector3_t acceleration_raw;
     initialiseAll();
-    displayUpdate("Num.", "Steps", steps, 0, NULL);
-    acceleration_raw = getAcclData();
-    writeCircBuf (&g_xinBuffer, acceleration_raw.x);
-    writeCircBuf (&g_yinBuffer, acceleration_raw.y);
-    writeCircBuf (&g_zinBuffer, acceleration_raw.z);
-
     // MAIN LOOP
     while (1)
     {
         checkBoardMode();
 
-        checkResetButton();
-
-        checkOtherButtons();
-
-        acceleration_raw = getAcclData();
-        checkIfStep(acceleration_raw);
+        checkButtons();
 
         //**************************
-        // If tick counter then update display
+        // If tick counter then check accelerometer for a step and update display
         //**************************
         if (accTick)
         {
             accTick = false;
+            acceleration_raw = getAcclData();
+
+            updateBuffer(acceleration_raw);
 
             refreshDisplay();
 
-
+            checkIfStep(acceleration_raw);
         }
 
     }
